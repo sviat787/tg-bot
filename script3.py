@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import sqlite3
-from threading import Thread
+from aiohttp import web
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
@@ -13,10 +13,8 @@ from aiogram.types import (
     KeyboardButton,
     ReplyKeyboardMarkup,
 )
-from flask import Flask
 
 # ================= 1. НАЛАШТУВАННЯ ТА КАНАЛИ =================
-# Додайте сюди ваші канали
 CHANNELS = [
     {"id": "@oiuysn", "link": "https://t.me/oiuysn", "name": "Канал 1"},
     {"id": "@sellerwear", "link": "https://t.me/sellerwear", "name": "Канал 2"},
@@ -38,27 +36,12 @@ def init_db():
 
 init_db()
 
-# ================= 2. FLASK СЕРВЕР (для UptimeRobot) =================
-app = Flask("")
-
-@app.route("/")
-def home():
-    return "Bot is alive!"
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-t = Thread(target=run_flask)
-t.daemon = True
-t.start()
-
-# ================= 3. ІНІЦІАЛІЗАЦИЯ БОТА =================
+# ================= 2. ІНІЦІАЛІЗАЦІЯ БОТА =================
 API_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
-# ================= 4. КЛАВІАТУРИ =================
+# ================= 3. КЛАВІАТУРИ =================
 main_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [
@@ -85,7 +68,7 @@ def get_sub_keyboard():
     )
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# ================= 5. ВСПОМІЖНІ ФУНКЦІЇ =================
+# ================= 4. ДОПОМІЖНІ ФУНКЦІЇ =================
 async def is_subscribed_all(user_id: int) -> bool:
     for ch in CHANNELS:
         try:
@@ -94,9 +77,11 @@ async def is_subscribed_all(user_id: int) -> bool:
                 return False
         except TelegramBadRequest:
             return False
+        except Exception:
+            return False
     return True
 
-# ================= 6. ОБРОБНИКИ =================
+# ================= 5. ОБРОБНИКИ КОМАНД =================
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
@@ -114,7 +99,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
             cursor.execute("UPDATE users SET balance = balance + 5.0, referrals_count = referrals_count + 1 WHERE user_id = ?", (ref_id,))
             try:
                 await bot.send_message(chat_id=ref_id, text="🎉 За вашим посиланням зареєструвався новий користувач! Вам нараховано 5 ₴.")
-            except Exception: pass
+            except Exception:
+                pass
         cursor.execute("INSERT INTO users (user_id, referrer_id) VALUES (?, ?)", (user_id, ref_id))
         conn.commit()
     conn.close()
@@ -123,7 +109,8 @@ async def start_cmd(message: types.Message, command: CommandObject):
         await message.answer(f"👋 Привіт, {message.from_user.first_name}!", reply_markup=main_keyboard)
     else:
         await message.answer("⚠️ Для використання бота необхідно підписатися на наші канали!", reply_markup=get_sub_keyboard())
-        @dp.callback_query(F.data == "check_subscription")
+
+@dp.callback_query(F.data == "check_subscription")
 async def check_sub_callback(callback: types.CallbackQuery):
     if await is_subscribed_all(callback.from_user.id):
         await callback.message.delete()
@@ -138,6 +125,7 @@ async def profile_handler(message: types.Message):
     cursor.execute("SELECT balance, referrals_count FROM users WHERE user_id = ?", (message.from_user.id,))
     data = cursor.fetchone()
     conn.close()
+    
     balance = data[0] if data else 0.0
     refs = data[1] if data else 0
     await message.answer(f"👤 Ваш особистий кабінет:\n\n💰 Баланс: {balance} ₴\n👥 Запрошено друзів: {refs}", parse_mode="Markdown")
@@ -163,10 +151,27 @@ async def stats_handler(message: types.Message):
     cursor.execute("SELECT COUNT(*), SUM(balance) FROM users")
     data = cursor.fetchone()
     conn.close()
-    await message.answer(f"📊 Всього користувачів: {data[0] if data else 0}", parse_mode="Markdown")
+    
+    count = data[0] if data and data[0] else 0
+    await message.answer(f"📊 Всього користувачів: {count}", parse_mode="Markdown")
 
+# ================= 6. WEB SERVER ДЛЯ RENDER / UPTIMEROBOT =================
+async def handle_ping(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+# ================= 7. ЗАПУСК =================
 async def main():
     logging.basicConfig(level=logging.INFO)
+    await start_web_server()
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
