@@ -252,7 +252,7 @@ async def start_payout(message: Message, state: FSMContext):
     await state.set_state(PayoutState.wait_amount)
     await message.answer(f"Ваш баланс: <b>{user_balance} грн</b>\nВведіть суму для виплати:", parse_mode="HTML")
     @router.message(PayoutState.wait_amount)
-async def process_amount(message:Message,state:FSMContext):
+async defprocess_amount(message:Message,state:FSMContext):
     try:
         amount = float(message.text)
         user_balance = get_user_balance(message.from_user.id)
