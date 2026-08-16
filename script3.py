@@ -16,7 +16,7 @@ from aiogram.types import (
 )
 
 # === НАЛАШТУВАННЯ ===
-BOT_TOKEN = "ТВІЙ_ТОКЕН_БОТА"  # Вставити токен від @BotFather
+BOT_TOKEN = os.getnev("BOT_TOKEN")  # Вставити токен від @BotFather
 PRIMARY_ADMIN_ID = 5406292948  # Твій Telegram ID (Головний адмін)
 PROOF_CHANNEL_ID = -1001234567890  # ID твого каналу
 
