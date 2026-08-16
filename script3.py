@@ -248,8 +248,7 @@ async def start_payout(message: Message, state: FSMContext):
     if user_balance <= 0:
         await message.answer("❌ У вас недостатньо коштів на балансі для виведення.")
         return
-
-    await state.set_state(PayoutState.wait_amount)
+await state.set_state(PayoutState.wait_amount)
     await message.answer(f"Ваш баланс: <b>{user_balance} грн</b>\nВведіть суму для виплати:", parse_mode="HTML")
     @router.message(PayoutState.wait_amount)
 async def process_amount(message: Message , state :FSMContext):
