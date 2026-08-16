@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 from flask import Flask
 
-# 1. Запуск веб-сервера для Render (щоб бот працював 24/7)
+# 1. Створення Flask-сервера
 app = Flask('')
 
 
@@ -21,14 +21,18 @@ def run_flask():
   app.run(host='0.0.0.0', port=port)
 
 
-# 2. Отримання токена зі змінних оточення
-API_TOKEN = os.getenv('BOT_TOKEN')
+# 2. Запуск Flask у фоновому потоці ОДРАЗУ
+t = Thread(target=run_flask)
+t.daemon = True
+t.start()
 
+# 3. Налаштування бота
+API_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 
-# 3. Стартове повідомлення та кнопка запиту контакту
+# 4. Обробники
 @dp.message(Command('start'))
 async def start_cmd(message: types.Message):
   kb = ReplyKeyboardMarkup(
@@ -47,11 +51,9 @@ async def start_cmd(message: types.Message):
   )
 
 
-# 4. Обробка отриманого контакту та відкриття головного меню
 @dp.message(F.contact)
 async def contact_handler(message: types.Message):
   name = message.contact.first_name
-
   menu_kb = ReplyKeyboardMarkup(
       keyboard=[
           [
@@ -62,11 +64,9 @@ async def contact_handler(message: types.Message):
       ],
       resize_keyboard=True,
   )
-
   await message.answer(f'👋 Привіт, {name}!', reply_markup=menu_kb)
 
 
-# 5. Обробка натискань на кнопки меню
 @dp.message(F.text == '🏢 Особистий кабінет')
 async def profile_handler(message: types.Message):
   await message.answer('Ваш особистий кабінет:\nСтатус: Активний ✅')
@@ -84,15 +84,9 @@ async def stats_handler(message: types.Message):
   await message.answer('Загальна статистика:\nЗапрошено друзів: 0\nЗароблено: 0 грн')
 
 
-# 6. Запуск сервера та бота
+# 5. Головна асинхронна функція
 async def main():
-  # Запускаємо Flask у окремому фоновому потоці
-  t = Thread(target=run_flask)
-  t.daemon = True
-  t.start()
-
   logging.basicConfig(level=logging.INFO)
-  # Очищаємо старі вебхуки та запускаємо polling
   await bot.delete_webhook(drop_pending_updates=True)
   await dp.start_polling(bot)
 
