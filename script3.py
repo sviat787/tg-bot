@@ -16,7 +16,7 @@ from aiogram.types import (
 )
 
 # === НАЛАШТУВАННЯ ===
-BOT_TOKEN = os.getnev("BOT_TOKEN")  # Вставити токен від @BotFather
+BOT_TOKEN = "ТВІЙ_ТОКЕН_БОТА"  # Вставити токен від @BotFather
 PRIMARY_ADMIN_ID = 5406292948  # Твій Telegram ID (Головний адмін)
 PROOF_CHANNEL_ID = -1001234567890  # ID твого каналу
 
@@ -26,6 +26,7 @@ router = Router()
 
 BALANCES_FILE = "balances.json"
 ADMINS_FILE = "admins.json"
+
 
 # === УПРАВЛІННЯ СПИСКОМ АДМІНІВ ===
 def load_admins():
@@ -37,12 +38,15 @@ def load_admins():
             admins.append(PRIMARY_ADMIN_ID)
         return admins
 
+
 def save_admins(admins):
     with open(ADMINS_FILE, "w", encoding="utf-8") as f:
         json.dump(admins, f, ensure_ascii=False, indent=4)
 
+
 def is_admin(user_id: int) -> bool:
     return user_id in load_admins()
+
 
 # === РОБОТА З БАЛАНСАМИ ===
 def load_balances():
@@ -51,13 +55,16 @@ def load_balances():
     with open(BALANCES_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 def save_balances(data):
     with open(BALANCES_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+
 def get_user_balance(user_id: int) -> float:
     balances = load_balances()
     return balances.get(str(user_id), 0.0)
+
 
 def update_user_balance(user_id: int, amount: float):
     balances = load_balances()
@@ -67,9 +74,11 @@ def update_user_balance(user_id: int, amount: float):
     save_balances(balances)
     return balances[str_id]
 
+
 class PayoutState(StatesGroup):
     wait_amount = State()
     wait_card = State()
+
 
 def get_main_keyboard():
     return ReplyKeyboardMarkup(
@@ -80,6 +89,7 @@ def get_main_keyboard():
         resize_keyboard=True
     )
 
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     await message.answer(
@@ -87,10 +97,12 @@ async def cmd_start(message: Message):
         reply_markup=get_main_keyboard()
     )
 
+
 @router.message(F.text == "💰 Баланс")
 async def show_user_balance(message: Message):
     balance = get_user_balance(message.from_user.id)
     await message.answer(f"💳 Ваш поточний баланс: <b>{balance:.2f} грн</b>", parse_mode="HTML")
+
 
 # === КЕРУВАННЯ АДМІНІСТРАТОРАМИ ===
 
@@ -121,6 +133,7 @@ async def cmd_add_admin(message: Message):
     except ValueError:
         await message.answer("❌ Формат команди: <code>/addadmin ID_користувача</code>", parse_mode="HTML")
 
+
 # Видалити адміна: /deladmin 123456789
 @router.message(Command("deladmin"))
 async def cmd_del_admin(message: Message):
@@ -128,8 +141,6 @@ async def cmd_del_admin(message: Message):
         return
 
     try:
-        _, admin_to_remove = message.text.split()
-        admin_to_remove = int(admin_to_remove)
         if admin_to_remove == PRIMARY_ADMIN_ID:
             await message.answer("❌ Неможливо видалити головного адміністратора!")
             return
@@ -146,6 +157,7 @@ async def cmd_del_admin(message: Message):
     except ValueError:
         await message.answer("❌ Формат команди: <code>/deladmin ID_користувача</code>", parse_mode="HTML")
 
+
 # Переглянути список адмінів: /admins
 @router.message(Command("admins"))
 async def cmd_list_admins(message: Message):
@@ -158,7 +170,8 @@ async def cmd_list_admins(message: Message):
         text += f"• <code>{admin_id}</code>\n"
     await message.answer(text, parse_mode="HTML")
 
-# === КЕРУВАННЯ БАЛАНСОМ (для всіх адмінів) ===
+
+# === КЕРУВАННЯ БАЛАНСОМ ===
 
 @router.message(Command("addbalance"))
 async def cmd_add_balance(message: Message):
@@ -180,6 +193,7 @@ async def cmd_add_balance(message: Message):
     except ValueError:
         await message.answer("❌ Формат команди: <code>/addbalance ID_користувача сума</code>", parse_mode="HTML")
 
+
 @router.message(Command("subbalance"))
 async def cmd_sub_balance(message: Message):
     if not is_admin(message.from_user.id):
@@ -199,6 +213,7 @@ async def cmd_sub_balance(message: Message):
             pass
     except ValueError:
         await message.answer("❌ Формат команди: <code>/subbalance ID_користувача сума</code>", parse_mode="HTML")
+
 
 # === СТАТИСТИКА ТА ВИПЛАТИ ===
 
@@ -220,9 +235,11 @@ async def show_stats(message: Message):
     )
     await message.answer(stats_text, parse_mode="HTML")
 
+
 @router.message(F.text == "📣 Канал виплат")
 async def show_channel_info(message: Message):
     await message.answer("Переглянути всі виплати та докази можна у нашому каналі!")
+
 
 @router.message(F.text == "💸 Вивести кошти")
 @router.message(Command("payout"))
@@ -233,9 +250,9 @@ async def start_payout(message: Message, state: FSMContext):
         return
 
     await state.set_state(PayoutState.wait_amount)
-    await message.answer(f"Ваш баланс:<b>{user_balance}грн</b>\nВведіть суму для виплати:", parse_mode="HTML")
+    await message.answer(f"Ваш баланс: <b>{user_balance} грн</b>\nВведіть суму для виплати:", parse_mode="HTML")
     @router.message(PayoutState.wait_amount)
-    async def process_amount(message: Message, state: FSMContext):
+async def process_amount(message: Message, state: FSMContext):
     try:
         amount = float(message.text)
         user_balance = get_user_balance(message.from_user.id)
@@ -249,6 +266,7 @@ async def start_payout(message: Message, state: FSMContext):
         await message.answer("Введіть номер картки та ПІБ отримувача:")
     except ValueError:
         await message.answer("Будь ласка, введіть число (наприклад, 100 або 250.50):")
+
 
 @router.message(PayoutState.wait_card)
 async def process_card(message: Message, state: FSMContext):
@@ -277,12 +295,12 @@ async def process_card(message: Message, state: FSMContext):
         f"💳 Картка: <code>{card_info}</code>"
     )
     
-    # Надсилаємо сповіщення усім адмінам зі списку
     for admin_id in load_admins():
         try:
             await bot.send_message(chat_id=admin_id, text=admin_text, parse_mode="HTML", reply_markup=kb)
         except Exception:
             pass
+
 
 @router.callback_query(F.data.startswith("done_"))
 async def confirm_payout(call: CallbackQuery):
@@ -313,6 +331,7 @@ async def confirm_payout(call: CallbackQuery):
 
     await call.message.edit_text(f"{call.message.text}\n\n✅ <b>ВИПЛАЧЕНО (Обробив @{call.from_user.username})</b>", parse_mode="HTML")
 
+
 @router.callback_query(F.data.startswith("reject_"))
 async def reject_payout(call: CallbackQuery):
     if not is_admin(call.from_user.id):
@@ -333,10 +352,14 @@ async def reject_payout(call: CallbackQuery):
 
     await call.message.edit_text(f"{call.message.text}\n\n❌ <b>ВІДХИЛЕНО (Обробив @{call.from_user.username})</b>", parse_mode="HTML")
 
+
 async def main():
     dp.include_router(router)
     await dp.start_polling(bot)
 
+
 if name == "main":
     logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
+        _, admin_to_remove = message.text.split()
+        admin_to_remove = int(admin_to_remove)
