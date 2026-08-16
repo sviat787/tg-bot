@@ -1,95 +1,49 @@
-import asyncio
-import logging
-import os
-from threading import Thread
-from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import Command
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
-from flask import Flask
+@dp.callback_query(F.data == "check_subscription")
+async def check_sub_callback(callback: types.CallbackQuery):
+    if await is_subscribed_all(callback.from_user.id):
+        await callback.message.delete()
+        await callback.message.answer("✅ Дякуємо за підписку!", reply_markup=main_keyboard)
+    else:
+        await callback.answer("❌ Ви підписалися не на всі канали!", show_alert=True)
 
-# 1. Створення Flask-сервера
-app = Flask('')
-
-
-@app.route('/')
-def home():
-  return 'Bot is alive!'
-
-
-def run_flask():
-  port = int(os.environ.get('PORT', 10000))
-  app.run(host='0.0.0.0', port=port)
-
-
-# 2. Запуск Flask у фоновому потоці ОДРАЗУ
-t = Thread(target=run_flask)
-t.daemon = True
-t.start()
-
-# 3. Налаштування бота
-API_TOKEN = os.getenv('BOT_TOKEN')
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
-
-
-# 4. Обробники
-@dp.message(Command('start'))
-async def start_cmd(message: types.Message):
-  kb = ReplyKeyboardMarkup(
-      keyboard=[
-          [
-              KeyboardButton(
-                  text='📱 Надіслати номер телефону', request_contact=True
-              )
-          ]
-      ],
-      resize_keyboard=True,
-  )
-  await message.answer(
-      'Раді бачити вас у боті! Надішліть номер телефону для перевірки:',
-      reply_markup=kb,
-  )
-
-
-@dp.message(F.contact)
-async def contact_handler(message: types.Message):
-  name = message.contact.first_name
-  menu_kb = ReplyKeyboardMarkup(
-      keyboard=[
-          [
-              KeyboardButton(text='🏢 Особистий кабінет'),
-              KeyboardButton(text='💰 Заробити'),
-          ],
-          [KeyboardButton(text='📊 Статистика')],
-      ],
-      resize_keyboard=True,
-  )
-  await message.answer(f'👋 Привіт, {name}!', reply_markup=menu_kb)
-
-
-@dp.message(F.text == '🏢 Особистий кабінет')
+@dp.message(F.text == "🏦 Особистий кабінет")
 async def profile_handler(message: types.Message):
-  await message.answer('Ваш особистий кабінет:\nСтатус: Активний ✅')
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT balance, referrals_count FROM users WHERE user_id = ?", (message.from_user.id,))
+    data = cursor.fetchone()
+    conn.close()
+    balance = data[0] if data else 0.0
+    refs = data[1] if data else 0
+    await message.answer(f"👤 Ваш особистий кабінет:\n\n💰 Баланс: {balance} ₴\n👥 Запрошено друзів: {refs}", parse_mode="Markdown")
 
-
-@dp.message(F.text == '💰 Заробити')
+@dp.message(F.text == "💸 Заробити")
 async def earn_handler(message: types.Message):
-  await message.answer(
-      "Розділ 'Заробити':\nВаше реферальне посилання з'явиться тут."
-  )
+    bot_info = await bot.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start={message.from_user.id}"
+    await message.answer(f"💸 | За кожного реферала ви будете отримувати 5.0 ₴\n\nℹ️ Ваше посилання:\n{ref_link}", parse_mode="Markdown")
 
+@dp.message(F.text == "📝 Замовити рекламу")
+async def adv_handler(message: types.Message):
+    await message.answer("Щоб замовити рекламу, пишіть до @sviat787")
 
-@dp.message(F.text == '📊 Статистика')
+@dp.message(F.text == "💰 Завдання")
+async def tasks_handler(message: types.Message):
+    await message.answer("Наразі доступних завдань немає.")
+
+@dp.message(F.text == "📊 Статистика")
 async def stats_handler(message: types.Message):
-  await message.answer('Загальна статистика:\nЗапрошено друзів: 0\nЗароблено: 0 грн')
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*), SUM(balance) FROM users")
+    data = cursor.fetchone()
+    conn.close()
+    await message.answer(f"📊 Всього користувачів: {data[0] if data else 0}", parse_mode="Markdown")
 
-
-# 5. Головна асинхронна функція
 async def main():
-  logging.basicConfig(level=logging.INFO)
-  await bot.delete_webhook(drop_pending_updates=True)
-  await dp.start_polling(bot)
+    logging.basicConfig(level=logging.INFO)
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
 
-
-if __name__ == '__main__':
-  asyncio.run(main())
+if name == "main":
+    asyncio.run(main())
