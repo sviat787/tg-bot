@@ -125,7 +125,7 @@ def update_pending_payouts(change: int):
     stats = load_stats_data()
     current = stats.get("pending_payouts", 0) + change
 stats["pending_payouts"] = max(0, current)
-    save_stats_data(stats)
+save_stats_data(stats)
 
 
 class PayoutState(StatesGroup):
