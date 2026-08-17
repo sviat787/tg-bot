@@ -124,7 +124,7 @@ def add_to_total_withdrawn(amount: float):
 def update_pending_payouts(change: int):
     stats = load_stats_data()
     current = stats.get("pending_payouts", 0) + change
-    stats["pending_payouts"] = max(0, current)
+stats["pending_payouts"] = max(0, current)
     save_stats_data(stats)
 
 
