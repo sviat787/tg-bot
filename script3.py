@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 import os
+from aiohttp import web  # Додано для сумісності з Render
+
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -27,6 +29,23 @@ router = Router()
 BALANCES_FILE = "balances.json"
 ADMINS_FILE = "admins.json"
 STATS_FILE = "stats_data.json"
+
+
+# === ДУММІ-СЕРВЕР ДЛЯ RENDER HEALTH CHECK ===
+async def handle_health_check(request):
+    return web.Response(text="OK")
+
+
+async def start_dummy_server():
+    app = web.Application()
+    app.router.add_get("/", handle_health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    # Render автоматично передає порт у змінну середовища PORT
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
 
 
 # === УПРАВЛІННЯ СПИСКОМ АДМІНІВ ===
@@ -122,9 +141,7 @@ def get_main_keyboard():
         ],
         resize_keyboard=True
     )
-
-
-@router.message(Command("start"))
+    @router.message(Command("start"))
 async def cmd_start(message: Message):
     balances = load_balances()
     if str(message.from_user.id) not in balances:
@@ -144,6 +161,7 @@ async def show_user_balance(message: Message):
 
 
 # === КЕРУВАННЯ АДМІНІСТРАТОРАМИ ===
+
 @router.message(Command("addadmin"))
 async def cmd_add_admin(message: Message):
     if not is_admin(message.from_user.id):
@@ -241,7 +259,6 @@ async def cmd_set_balance(message: Message):
         _, target_id, amount = message.text.split()
         target_id = int(target_id)
         amount = float(amount)
-
         new_balance = set_user_balance(target_id, amount)
         await message.answer(f"✅ Встановлено баланс <b>{new_balance:.2f} грн</b> для <code>{target_id}</code>.", parse_mode="HTML")
         
@@ -262,6 +279,7 @@ async def cmd_sub_balance(message: Message):
         _, target_id, amount = message.text.split()
         target_id = int(target_id)
         amount = float(amount)
+
         new_balance = update_user_balance(target_id, -amount)
         await message.answer(f"✅ Знято {amount} грн у користувача <code>{target_id}</code>.\nНовий баланс: <b>{new_balance:.2f} грн</b>", parse_mode="HTML")
         
@@ -340,8 +358,7 @@ async def process_amount(message: Message, state: FSMContext):
         if amount <= 0 or amount > user_balance:
             await message.answer("❌ Некоректна сума або перевищує ваш баланс. Спробуйте ще раз:")
             return
-
-        await state.update_data(amount=amount)
+            await state.update_data(amount=amount)
         await state.set_state(PayoutState.wait_card)
         await message.answer("Введіть номер картки та ПІБ отримувача:")
     except ValueError:
@@ -442,9 +459,14 @@ async def reject_payout(call: CallbackQuery):
 
 async def main():
     dp.include_router(router)
+    
+    # Запускаємо веб-сервер у тій самій подійній петлі asyncio
+    await start_dummy_server()
+    
+    # Запускаємо polling бота
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
+if name == "main":
     logging.basicConfig(level=logging.INFO)
     asyncio.run(main())
