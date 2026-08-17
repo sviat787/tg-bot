@@ -141,8 +141,8 @@ def get_main_keyboard():
         ],
         resize_keyboard=True
     )
-    @router.message(Command("start"))
-async def cmd_start(message: Message):
+        @router.message(Command("start"))
+        async def cmd_start(message: Message):
     balances = load_balances()
     if str(message.from_user.id) not in balances:
         balances[str(message.from_user.id)] = 0.0
