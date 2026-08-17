@@ -362,3 +362,89 @@ async def process_card(message: Message, state: FSMContext):
     await message.answer("✅ Заявку прийнято! Вона відправлена адміністратору. Очікуйте переказу.")
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Виплачено", callback_data=f"done_{user.id}_{amount}"),
+            InlineKeyboardButton(text="❌ Відхилити", callback_data=f"reject_{user.id}_{amount}")
+        ]
+    ])
+    
+    admin_text = (
+        f"📥 <b>Нова заявка на виплату!</b>\n\n"
+        f"👤 Користувач: {user.full_name} (@{user.username})\n"
+        f"🆔 User ID: <code>{user.id}</code>\n"
+        f"💵 Сума: <b>{amount:.2f} грн</b>\n"
+        f"💳 Картка: <code>{card_info}</code>"
+    )
+    
+    for admin_id in load_admins():
+        try:
+            await bot.send_message(chat_id=admin_id, text=admin_text, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data.startswith("done_"))
+async def confirm_payout(call: CallbackQuery):
+    if not is_admin(call.from_user.id):
+        return
+
+    _, user_id, amount = call.data.split("_")
+    amount = float(amount)
+
+    add_to_total_withdrawn(amount)
+    update_pending_payouts(-1)
+
+    try:
+        await bot.send_message(
+            chat_id=int(user_id), 
+            text=f"🎉 <b>Виплату виконано!</b>\nНа вашу картку перераховано {amount:.2f} грн.", 
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+    channel_text = (
+        f"💸 <b>Успішна виплата!</b>\n\n"
+        f"🔹 Сума: <b>{amount:.2f} грн</b>\n"
+        f"🔹 Статус: Виконано ✅\n"
+        f"🔹 Дякуємо за роботу!"
+    )
+    try:
+        await bot.send_message(chat_id=PROOF_CHANNEL_ID, text=channel_text, parse_mode="HTML")
+    except Exception as e:
+        await call.answer(f"Помилка відправки в канал: {e}", show_alert=True)
+
+    await call.message.edit_text(f"{call.message.text}\n\n✅ <b>ВИПЛАЧЕНО (Обробив @{call.from_user.username})</b>", parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("reject_"))
+async def reject_payout(call: CallbackQuery):
+    if not is_admin(call.from_user.id):
+        return
+
+    _, user_id, amount = call.data.split("_")
+    amount = float(amount)
+    
+    update_user_balance(int(user_id), amount)
+    update_pending_payouts(-1)
+
+    try:
+        await bot.send_message(
+            chat_id=int(user_id), 
+            text=f"❌ Вашу заявку на виплату {amount:.2f} грн відхилено. Кошти повернуто на ваш баланс.", 
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+    await call.message.edit_text(f"{call.message.text}\n\n❌ <b>ВІДХИЛЕНО (Обробив @{call.from_user.username})</b>", parse_mode="HTML")
+
+
+async def main():
+    dp.include_router(router)
+    await dp.start_polling(bot)
+
+
+if __name__ == __"__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
